@@ -2648,6 +2648,71 @@ SYSCALL_DEFINE3(getcpu, unsigned __user *, cpup, unsigned __user *, nodep,
 	return err ? -EFAULT : 0;
 }
 
+noinline static int _stub_bpf_prog_entry(int arg1) {
+    int ret_bpf;
+    printk(KERN_INFO "bpf(%d): %d", arg1, ret_bpf);
+    return ret_bpf;
+}
+
+noinline static int stack_switch_trampoline(int a, int b) {
+    int bpf_prog_ret;
+    void *bpf_stack = NULL, *kernel_stack = NULL, *bpf_stack_base = NULL;
+
+    // Create a new stack somewhere from vmalloc
+    bpf_stack = __vmalloc_node_range(THREAD_SIZE, THREAD_ALIGN,
+                    VMALLOC_START, VMALLOC_END,
+                    THREADINFO_GFP & ~__GFP_ACCOUNT,
+                    PAGE_KERNEL,
+                    0, current->pref_node_fork, __builtin_return_address(0));
+    if (!bpf_stack)
+        return -1;
+
+    // Copy current stack frame in the old stack memory to the new stack memory region.
+    bpf_stack_base = (char *)bpf_stack + 0x4000;
+
+    // Swap rsp to new rsp
+    asm volatile (
+        "movq %%rsp, %0;"
+        : "=r" (kernel_stack)
+        : 
+        : "memory"
+    );
+
+    asm volatile (
+        "movq %0, %%rsp;"
+        : 
+        : "r" (bpf_stack_base)
+        : "memory"
+    );
+
+    // Call eBPF program from here 
+    bpf_prog_ret = _stub_bpf_prog_entry((int) a);
+    
+    // Swap new rsp with old
+    asm volatile (
+        "movq %0, %%rsp;"
+        :
+        : "r" (kernel_stack)
+        : "memory"
+    );
+
+    // TODO: Free stack
+    
+    return 0;
+}
+
+SYSCALL_DEFINE0(test_stack)
+{
+    int switch_status;
+  printk(KERN_INFO "Testing stack\n");
+
+  //test_old_stack_base_function(1, 2);
+  switch_status = stack_switch_trampoline(7, 2);
+  printk(KERN_INFO "switch_status: %d\n", switch_status);
+  printk(KERN_INFO "Exiting from stack test syscall..\n");
+  return 0;
+}
+
 /**
  * do_sysinfo - fill in sysinfo struct
  * @info: pointer to buffer to fill
