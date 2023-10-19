@@ -29,6 +29,8 @@
 #include <linux/rcupdate_trace.h>
 #include <linux/static_call.h>
 
+//#define BPF_PROG_STACK_SWITCH 0
+
 struct bpf_verifier_env;
 struct bpf_verifier_log;
 struct perf_event;
@@ -63,6 +65,11 @@ typedef int (*bpf_iter_init_seq_priv_t)(void *private_data,
 typedef void (*bpf_iter_fini_seq_priv_t)(void *private_data);
 typedef unsigned int (*bpf_func_t)(const void *,
 				   const struct bpf_insn *);
+
+extern unsigned int bpf_dispatcher_stack_switch_func(const void *ctx,
+                                          const struct bpf_insn *insnsi,
+                                          bpf_func_t bpf_func);
+
 struct bpf_iter_seq_info {
 	const struct seq_operations *seq_ops;
 	bpf_iter_init_seq_priv_t init_seq_private;

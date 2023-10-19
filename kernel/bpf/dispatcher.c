@@ -171,3 +171,72 @@ void bpf_dispatcher_change_prog(struct bpf_dispatcher *d, struct bpf_prog *from,
 out:
 	mutex_unlock(&d->mutex);
 }
+
+  #ifdef BPF_PROG_STACK_SWITCH
+
+  /* BPF dispacter for stack overflow protected programs
+      TODO: Implement Stack management for the newly created stack(s)
+      TODO: Implement mechanism to manage current thread's vm stack management
+      TODO: Fine tune the knobs for better control, i.e, policies on whether
+              the stack should be created? or limits on the stack creation
+              or even situation where there not be a possible bpf program be runnable
+              due to possible stackoverflow, etc, */
+__nocfi unsigned int bpf_dispatcher_stack_switch_func(
+      const void *ctx,
+      const struct bpf_insn *insnsi,
+      bpf_func_t bpf_func)
+  {
+      unsigned int bpf_prog_ret = -1;
+      void *bpf_stack = NULL, *kernel_stack = NULL, *bpf_stack_base = NULL;
+
+      // Create a new stack somewhere from vmalloc
+      bpf_stack = __vmalloc_node_range(THREAD_SIZE, THREAD_ALIGN,
+                      VMALLOC_START, VMALLOC_END,
+                      THREADINFO_GFP & ~__GFP_ACCOUNT,
+                      PAGE_KERNEL,
+                      0, current->pref_node_fork, __builtin_return_address(0));
+
+      if (!bpf_stack)
+          return -ENOMEM;
+
+      // Copy current stack frame in the old stack memory to the new stack memory region.
+      // TODO: change 0x4000 to THREAD_SIZE
+      bpf_stack_base = (char *)bpf_stack + 0x4000;
+
+      // TODO: Save caller-saved-regs
+
+      // Swap rsp to new rsp
+      asm volatile (
+            "movq %%rsp, %0;"
+            : "=r" (kernel_stack)
+            :
+            : "memory"
+      );
+
+      asm volatile (
+            "movq %0, %%rsp;"
+            :
+            : "r" (bpf_stack_base)
+            : "memory"
+      );
+
+      // Call eBPF program from here
+      bpf_prog_ret = bpf_func(ctx, insnsi);
+
+      // Swap new rsp with old
+      asm volatile (
+            "movq %0, %%rsp;"
+            :
+            : "r" (kernel_stack)
+            : "memory"
+      );
+
+      // TODO: Restore caller-saved-regs
+
+      // TODO: Free stack
+
+      return 0;
+  }
+
+  #endif
+

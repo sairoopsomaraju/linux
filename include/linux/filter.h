@@ -38,6 +38,10 @@ struct sock_reuseport;
 struct ctl_table;
 struct ctl_table_header;
 
+/* Enable this to use BPF stack protection mechanism, i.e, swtiching to a new BPF stack
+    TODO: Find a better place to configure this feature */
+#define BPF_PROG_STACK_SWITCH 1
+
 /* ArgX, context and stack frame pointer register positions. Note,
  * Arg1, Arg2, Arg3, etc are used as argument mappings of function
  * calls in BPF_CALL instruction.
@@ -604,7 +608,11 @@ static __always_inline u32 __bpf_prog_run(const struct bpf_prog *prog,
 
 static __always_inline u32 bpf_prog_run(const struct bpf_prog *prog, const void *ctx)
 {
+#ifdef BPF_PROG_STACK_SWITCH
+    return __bpf_prog_run(prog, ctx, bpf_dispatcher_stack_switch_func);
+#else
 	return __bpf_prog_run(prog, ctx, bpf_dispatcher_nop_func);
+#endif
 }
 
 /*
