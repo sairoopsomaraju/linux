@@ -215,8 +215,10 @@ const struct bpf_func_proto bpf_ktime_get_tai_ns_proto = {
 
 BPF_CALL_0(bpf_get_current_pid_tgid)
 {
+    register unsigned long long *esp_value asm ("rsp");
 	struct task_struct *task = current;
 
+    printk(KERN_INFO "RSP value: %llu\n", esp_value);
 	if (unlikely(!task))
 		return -EINVAL;
 

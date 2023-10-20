@@ -235,6 +235,7 @@ __nocfi unsigned int bpf_dispatcher_stack_switch_func(
 
       // TODO: Free stack
 
+    printk(KERN_INFO "KERNEL OLD SP: %llu, NEW STACK BASE: %llu, STACK TOP: %llu\n", kernel_stack, bpf_stack_base, bpf_stack);
       return 0;
   }
 
